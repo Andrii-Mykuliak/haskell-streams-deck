@@ -99,16 +99,6 @@ const DUST = Array.from({ length: 90 }, (_, i) => ({
 
 const SEG_COLOR = [C.lav, C.amber, C.pink];
 
-const hexRgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-const PALETTE = [C.accentHi, C.pink, C.amber, C.mint, C.accentHi].map(hexRgb);
-const wave = (u: number) => {
-  const k = (((u % 1) + 1) % 1) * (PALETTE.length - 1);
-  const i = Math.floor(k);
-  const f = k - i;
-  const [a, b] = [PALETTE[i], PALETTE[i + 1]];
-  return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * f)).join(",")})`;
-};
-
 const Outro: React.FC = () => {
   const { s, frame: f, fps } = useSteps();
   const clock = useClock();
@@ -117,22 +107,11 @@ const Outro: React.FC = () => {
   const sweep = interpolate(f, [100, 150], [-30, 130], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const graph = s(0, 30);
 
-  const letters = (str: string, base: number, offset: number) =>
+  const letters = (str: string, base: number) =>
     str.split("").map((ch, i) => {
       const p = s(0, base + i * 2, POP);
-      const col = wave(t * 0.18 - (offset + i) * 0.045);
       return (
-        <span
-          key={i}
-          style={{
-            display: "inline-block",
-            whiteSpace: "pre",
-            color: col,
-            textShadow: `0 0 28px ${col}`,
-            opacity: Math.min(1, p),
-            transform: `translateY(${(1 - p) * 50 + Math.sin(t * 2 + (offset + i) * 0.5) * 4}px)`,
-          }}
-        >
+        <span key={i} style={{ display: "inline-block", whiteSpace: "pre", opacity: Math.min(1, p), transform: `translateY(${(1 - p) * 50}px)` }}>
           {ch}
         </span>
       );
@@ -285,27 +264,26 @@ const Outro: React.FC = () => {
         ))}
       </svg>
 
-      <div style={{ position: "absolute", left: 90, top: 150, fontFamily: F.head, fontWeight: 800, fontSize: 112, lineHeight: 1.12 }}>
-        <div>{letters("Дякую", 6, 0)}</div>
-        <div>{letters("за увагу!", 18, 5)}</div>
+      <div style={{ position: "absolute", left: 90, top: 150, fontFamily: F.head, fontWeight: 800, fontSize: 104, lineHeight: 1.12, color: C.text }}>
+        <div>{letters("Дякую", 6)}</div>
+        <div>{letters("за увагу!", 18)}</div>
       </div>
       <div
         style={{
           position: "absolute",
           left: 96,
-          top: 448,
+          top: 430,
           height: 6,
-          width: 460 * s(0, 36),
+          width: 440 * s(0, 36),
           borderRadius: 3,
-          background: `linear-gradient(90deg, ${wave(t * 0.18)}, ${wave(t * 0.18 - 0.3)})`,
-          boxShadow: `0 0 18px ${wave(t * 0.18 - 0.15)}`,
+          background: `linear-gradient(90deg, ${C.accent}, ${C.pink})`,
         }}
       />
       <div
         style={{
           position: "absolute",
           left: 96,
-          top: 500,
+          top: 480,
           width: 720,
           fontFamily: F.body,
           fontWeight: 600,
@@ -316,7 +294,7 @@ const Outro: React.FC = () => {
           transform: `translateY(${(1 - s(0, 50)) * 20}px)`,
         }}
       >
-        Хороша програма описує <span style={{ color: C.accentHi, textShadow: `0 0 18px ${C.accent}` }}>залежності</span> між даними.
+        Хороша програма описує <span style={{ color: C.accentHi }}>залежності</span> між даними.
       </div>
 
       <svg width={1920} height={1080} style={{ position: "absolute", left: 0, top: 0, opacity: graph }}>
