@@ -69,7 +69,13 @@ const S25: React.FC = () => {
   const lineY = (i: number) => Y + i * LH;
   const cur = Math.max(-1, Math.min(3, Math.floor(t(2, 0) / 30)));
   return (
-    <Slide title="Лаконічний конвеєр із оператором (&)">
+    <Slide
+      title={
+        <>
+          Лаконічний конвеєр із оператором <span style={{ fontFamily: F.mono, fontSize: "0.88em", fontWeight: 500 }}>(&amp;)</span>
+        </>
+      }
+    >
       <Lead>Послідовність обробки читається від джерела до агрегованого результату.</Lead>
       <SyntaxBox x={1100} y={290} w={720} step={1} size={26} title="Оператор (&)" lines={["{x} & {f}  =  {f} {x}", "-- значення ліворуч, функція праворуч"]} />
       {cur >= 0 && (
@@ -691,43 +697,68 @@ const S32: React.FC = () => {
 };
 
 /* 33 · Підсумок */
-const POINTS = [
-  { t: "Потоки", d: "джерела, перетворення, споживачі" },
-  { t: "Моделі", d: "DFD та граф залежностей" },
-  { t: "Haskell", d: "ліниві потоки та функційні операції" },
-  { t: "Згортки", d: "спільна основа map, filter, агрегатів" },
-  { t: "Конвеєри", d: "чисті перетворення та впорядковані ефекти" },
+const POINTS: React.ReactNode[] = [
+  <>
+    <A>Потік даних</A> – упорядкована послідовність значень; потокове обчислення складається з джерела, перетворень і споживача результату.
+  </>,
+  <>
+    <A>DFD</A> показує, як інформація рухається між сутностями, процесами та сховищами, а <A>граф залежностей</A> – які результати потрібні кожній
+    операції; порядку виконання не задає жодна з цих моделей.
+  </>,
+  <>
+    У Haskell потоки зручно задавати <A>лінивими списками</A>: <M>[a ..]</M>, <M>iterate</M>, <M>cycle</M> і <M>zipWith</M> описують правило, а
+    споживач, наприклад <M>take</M>, визначає, скільки елементів обчислити.
+  </>,
+  <>
+    <A>Згортка</A> зводить послідовність до одного значення за допомогою початкового значення <M c={C.amber}>z</M> і кроку{" "}
+    <M c={C.amber}>f</M>; <M>sum</M>, <M>length</M>, <M>map</M> і <M>filter</M> – окремі випадки <M>foldr</M>.
+  </>,
+  <>
+    <M>foldl</M> накопичує результат зліва, <M>{"foldl'"}</M> робить це строго, а <M>scanl</M> зберігає всі проміжні значення накопичення.
+  </>,
+  <>
+    <A>Конвеєр</A>, записаний через <M>(&amp;)</M>, складається з чистих перетворень, а дії <M c={C.lav}>IO</M> – читання файлу та виведення –
+    зосереджено в <M>main</M>.
+  </>,
 ];
 
 const S33: React.FC = () => {
   const { s } = useSteps();
   return (
     <Slide>
-      <div style={{ position: "absolute", right: 90, top: 90, opacity: 0.22 * s(0, 10) }}>
-        <HaskellLogo size={380} p1={s(0, 4, POP)} p2={s(0, 10, POP)} p3={s(0, 16, POP)} />
-      </div>
-      <At x={130} y={140} step={0} delay={4} size={76} weight={800} font={F.head}>
+      <At x={130} y={96} step={0} delay={4} size={72} weight={800} font={F.head}>
         Підсумок
       </At>
+      <div
+        style={{
+          position: "absolute",
+          left: 134,
+          top: 196,
+          height: 6,
+          width: 360 * s(0, 10),
+          borderRadius: 3,
+          background: `linear-gradient(90deg, ${C.accent}, ${C.pink})`,
+        }}
+      />
       {POINTS.map((p, i) => {
         const a = s(0, 16 + i * 10, POP);
         return (
           <div
-            key={p.t}
+            key={i}
             style={{
               position: "absolute",
-              left: 170,
-              top: 300 + i * 112,
+              left: 134,
+              top: 250 + i * 128,
+              width: 1660,
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-start",
               gap: 30,
               opacity: clamp01(a),
               transform: `translateX(${(1 - a) * -30}px)`,
             }}
           >
-            <Num n={i + 1} size={56} />
-            <div style={{ width: 260, fontFamily: F.body, fontWeight: 800, fontSize: 40, color: C.text }}>{p.t}</div>
-            <div style={{ fontFamily: F.body, fontWeight: 500, fontSize: 36, color: C.dim }}>{p.d}</div>
+            <Num n={i + 1} size={48} style={{ marginTop: 2 }} />
+            <div style={{ fontFamily: F.body, fontWeight: 500, fontSize: 31, lineHeight: 1.4, color: C.text }}>{p}</div>
           </div>
         );
       })}

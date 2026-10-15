@@ -13,7 +13,7 @@ const NODES: Record<NodeId, GNode> = {
   S3: { x: 1000, y: 790, w: 170, label: "getLine", color: C.lav },
   F1: { x: 1260, y: 330, w: 140, label: "filter", color: C.amber },
   M1: { x: 1260, y: 710, w: 140, label: "map", color: C.amber },
-  Z: { x: 1480, y: 520, w: 150, label: "zipWith", color: C.amber },
+  Z: { x: 1480, y: 520, w: 150, label: "zipWith", color: C.pink },
   FOLD: { x: 1720, y: 520, w: 150, label: "foldr", color: C.mint },
 };
 
@@ -57,16 +57,18 @@ const lenOf = (b: Bez) => {
 
 const PATHS: { nodes: NodeId[]; offset: number; drops: boolean }[] = [
   { nodes: ["S1", "F1", "Z", "FOLD"], offset: 0, drops: true },
-  { nodes: ["S2", "M1", "Z", "FOLD"], offset: 0.47, drops: false },
-  { nodes: ["S3", "M1", "Z", "FOLD"], offset: 0.93, drops: false },
+  { nodes: ["S2", "M1", "Z", "FOLD"], offset: 0.23, drops: false },
+  { nodes: ["S3", "M1", "Z", "FOLD"], offset: 0.46, drops: false },
 ];
 
 const SEGS = PATHS.map((p) => p.nodes.slice(1).map((n, i) => bez(p.nodes[i], n)));
 const SEG_LEN = SEGS.map((ss) => ss.map(lenOf));
 const TOTAL = SEG_LEN.map((ls) => ls.reduce((a, b) => a + b, 0));
-const SPEED = 240;
-const PERIOD = 1.4;
-const START = 1.2;
+const SPEED = 300;
+const PERIOD = 0.7;
+const START = 1.0;
+const BURST = 0.8;
+const TRAIL = 7;
 
 const posAlong = (pi: number, d: number) => {
   let rest = d;
@@ -86,16 +88,26 @@ const rnd = (n: number) => {
   return v - Math.floor(v);
 };
 
-const DUST = Array.from({ length: 46 }, (_, i) => ({
+const DUST = Array.from({ length: 90 }, (_, i) => ({
   x: rnd(i) * 1920,
   y: rnd(i + 100) * 1080,
-  r: 1 + rnd(i + 200) * 2.2,
-  v: 6 + rnd(i + 300) * 16,
+  r: 0.8 + rnd(i + 200) * 2.4,
+  v: 8 + rnd(i + 300) * 26,
   ph: rnd(i + 400) * 6.28,
-  c: [C.lav, C.accentHi, C.mint, C.amber][i % 4],
+  c: [C.lav, C.accentHi, C.mint, C.amber, C.pink][i % 5],
 }));
 
-const SEG_COLOR = [C.lav, C.amber, C.amber];
+const SEG_COLOR = [C.lav, C.amber, C.pink];
+
+const hexRgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const PALETTE = [C.accentHi, C.pink, C.amber, C.mint, C.accentHi].map(hexRgb);
+const wave = (u: number) => {
+  const k = (((u % 1) + 1) % 1) * (PALETTE.length - 1);
+  const i = Math.floor(k);
+  const f = k - i;
+  const [a, b] = [PALETTE[i], PALETTE[i + 1]];
+  return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * f)).join(",")})`;
+};
 
 const Outro: React.FC = () => {
   const { s, frame: f, fps } = useSteps();
@@ -105,11 +117,22 @@ const Outro: React.FC = () => {
   const sweep = interpolate(f, [100, 150], [-30, 130], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const graph = s(0, 30);
 
-  const letters = (str: string, base: number) =>
+  const letters = (str: string, base: number, offset: number) =>
     str.split("").map((ch, i) => {
       const p = s(0, base + i * 2, POP);
+      const col = wave(t * 0.18 - (offset + i) * 0.045);
       return (
-        <span key={i} style={{ display: "inline-block", whiteSpace: "pre", opacity: Math.min(1, p), transform: `translateY(${(1 - p) * 50}px)` }}>
+        <span
+          key={i}
+          style={{
+            display: "inline-block",
+            whiteSpace: "pre",
+            color: col,
+            textShadow: `0 0 28px ${col}`,
+            opacity: Math.min(1, p),
+            transform: `translateY(${(1 - p) * 50 + Math.sin(t * 2 + (offset + i) * 0.5) * 4}px)`,
+          }}
+        >
           {ch}
         </span>
       );
@@ -120,8 +143,9 @@ const Outro: React.FC = () => {
     glow[n] = Math.max(glow[n] ?? 0, v);
   };
   const particles: React.ReactNode[] = [];
+  const sparks: React.ReactNode[] = [];
   let arrived = 0;
-  let foldPulse = 0;
+  let lastArrival = -10;
 
   PATHS.forEach((path, pi) => {
     const base = START + path.offset;
@@ -134,7 +158,7 @@ const Outro: React.FC = () => {
     if (kDone >= 0) {
       arrived += kDone + 1 - (path.drops ? Math.floor((kDone + 1) / 3) : 0);
     }
-    const kFirst = Math.max(0, kLast - Math.ceil(life / PERIOD) - 1);
+    const kFirst = Math.max(0, kLast - Math.ceil((life + BURST) / PERIOD) - 1);
     for (let k = kFirst; k <= kLast; k++) {
       const age = t - (base + k * PERIOD);
       const d = age * SPEED;
@@ -148,78 +172,141 @@ const Outro: React.FC = () => {
         if (drop && ni > 1) {
           return;
         }
-        bump(n, Math.max(0, 1 - Math.abs(d - cum) / 50));
+        bump(n, Math.max(0, 1 - Math.abs(d - cum) / 60));
       });
       if (d >= TOTAL[pi]) {
-        if (!drop) {
-          foldPulse = Math.max(foldPulse, Math.exp(-(age - life) * 4));
+        if (drop) {
+          continue;
+        }
+        const since = age - life;
+        lastArrival = Math.max(lastArrival, t - since);
+        if (since < BURST) {
+          const p = since / BURST;
+          const cx = NODES.FOLD.x;
+          const cy = NODES.FOLD.y;
+          sparks.push(
+            <circle key={`ring-${pi}-${k}`} cx={cx} cy={cy} r={60 + 120 * p} fill="none" stroke={C.mint} strokeWidth={3 * (1 - p)} opacity={0.7 * (1 - p)} />,
+          );
+          for (let j = 0; j < 12; j++) {
+            const ang = (j / 12) * Math.PI * 2 + rnd(pi * 31 + k) * 6.28;
+            const rr = 70 + 150 * (1 - (1 - p) * (1 - p)) * (0.7 + 0.5 * rnd(j + k * 13));
+            sparks.push(
+              <circle
+                key={`sp-${pi}-${k}-${j}`}
+                cx={cx + Math.cos(ang) * rr}
+                cy={cy + Math.sin(ang) * rr * 0.75}
+                r={3.2 * (1 - p) + 0.6}
+                fill={j % 3 === 0 ? C.amber : C.mint}
+                opacity={1 - p}
+              />,
+            );
+          }
         }
         continue;
       }
       if (drop && d > dropAt) {
-        const fade = (d - dropAt) / 60;
+        const fade = (d - dropAt) / 120;
         if (fade < 1) {
           const q = at(SEGS[pi][0], 1);
-          particles.push(
-            <g key={`${pi}-${k}`} opacity={1 - fade}>
-              <circle cx={q.x + 8 * fade} cy={q.y + 40 * fade * fade} r={7} fill={C.red} />
-            </g>,
-          );
+          for (let j = 0; j < 7; j++) {
+            const ang = Math.PI * (0.15 + 0.7 * (j / 6));
+            const rr = 70 * fade;
+            sparks.push(
+              <circle
+                key={`dr-${pi}-${k}-${j}`}
+                cx={q.x + Math.cos(ang) * rr}
+                cy={q.y + Math.sin(ang) * rr + 90 * fade * fade}
+                r={3 * (1 - fade) + 0.5}
+                fill={C.red}
+                opacity={1 - fade}
+              />,
+            );
+          }
         }
         continue;
       }
-      const pos = posAlong(pi, d);
-      if (!pos) {
+      const head = posAlong(pi, d);
+      if (!head) {
         continue;
       }
-      const c = SEG_COLOR[pos.seg];
+      const c = SEG_COLOR[head.seg];
+      for (let j = TRAIL; j >= 1; j--) {
+        const tp = posAlong(pi, d - j * 9);
+        if (tp) {
+          particles.push(<circle key={`tr-${pi}-${k}-${j}`} cx={tp.p.x} cy={tp.p.y} r={8.5 * (1 - j / (TRAIL + 1))} fill={c} opacity={0.5 * (1 - j / (TRAIL + 1))} />);
+        }
+      }
       particles.push(
-        <g key={`${pi}-${k}`}>
-          <circle cx={pos.p.x} cy={pos.p.y} r={15} fill={c} opacity={0.18} />
-          <circle cx={pos.p.x} cy={pos.p.y} r={6.5} fill={c} />
+        <g key={`p-${pi}-${k}`}>
+          <circle cx={head.p.x} cy={head.p.y} r={24} fill={c} opacity={0.2} />
+          <circle cx={head.p.x} cy={head.p.y} r={9.5} fill={c} />
+          <circle cx={head.p.x} cy={head.p.y} r={3.8} fill="#ffffff" opacity={0.9} />
         </g>,
       );
     }
   });
-  bump("FOLD", foldPulse);
+  const foldKick = Math.exp(-(t - lastArrival) * 5);
+  bump("FOLD", foldKick);
+
+  const blobs = [
+    { x: 1350 + 160 * Math.sin(t * 0.21), y: 420 + 120 * Math.cos(t * 0.17), c: "141,118,220", a: 0.22 },
+    { x: 1650 + 140 * Math.cos(t * 0.15 + 1), y: 650 + 140 * Math.sin(t * 0.19 + 2), c: "178,95,168", a: 0.18 },
+    { x: 420 + 180 * Math.sin(t * 0.13 + 3), y: 760 + 100 * Math.cos(t * 0.23), c: "134,224,168", a: 0.1 },
+    { x: 1180 + 120 * Math.cos(t * 0.11 + 4), y: 820 + 90 * Math.sin(t * 0.16 + 1), c: "242,193,125", a: 0.1 },
+  ];
 
   return (
     <AbsoluteFill style={{ background: C.bg, overflow: "hidden" }}>
-      <AbsoluteFill style={{ background: `radial-gradient(ellipse at 70% 50%, rgba(242,193,125,0.08) 0%, rgba(141,118,220,0.10) 32%, ${C.bg} 64%)` }} />
+      {blobs.map((b, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            left: b.x - 520,
+            top: b.y - 520,
+            width: 1040,
+            height: 1040,
+            borderRadius: 520,
+            background: `radial-gradient(circle, rgba(${b.c},${b.a}) 0%, rgba(${b.c},0) 65%)`,
+            opacity: graph,
+          }}
+        />
+      ))}
       <svg width={1920} height={1080} style={{ position: "absolute", left: 0, top: 0 }}>
         {DUST.map((d, i) => (
           <circle
             key={i}
             cx={(d.x + t * d.v) % 1920}
-            cy={d.y}
+            cy={d.y + Math.sin(t * 0.6 + d.ph) * 10}
             r={d.r}
             fill={d.c}
-            opacity={(0.1 + 0.16 * (0.5 + 0.5 * Math.sin(t * 1.3 + d.ph))) * graph}
+            opacity={(0.12 + 0.3 * (0.5 + 0.5 * Math.sin(t * 1.7 + d.ph))) * graph}
           />
         ))}
       </svg>
 
-      <div style={{ position: "absolute", left: 90, top: 150, fontFamily: F.head, fontWeight: 800, fontSize: 104, lineHeight: 1.12, color: C.text }}>
-        <div>{letters("Дякую", 6)}</div>
-        <div>{letters("за увагу!", 18)}</div>
+      <div style={{ position: "absolute", left: 90, top: 150, fontFamily: F.head, fontWeight: 800, fontSize: 112, lineHeight: 1.12 }}>
+        <div>{letters("Дякую", 6, 0)}</div>
+        <div>{letters("за увагу!", 18, 5)}</div>
       </div>
       <div
         style={{
           position: "absolute",
           left: 96,
-          top: 430,
+          top: 448,
           height: 6,
-          width: 440 * s(0, 36),
+          width: 460 * s(0, 36),
           borderRadius: 3,
-          background: `linear-gradient(90deg, ${C.accent}, ${C.pink})`,
+          background: `linear-gradient(90deg, ${wave(t * 0.18)}, ${wave(t * 0.18 - 0.3)})`,
+          boxShadow: `0 0 18px ${wave(t * 0.18 - 0.15)}`,
         }}
       />
       <div
         style={{
           position: "absolute",
           left: 96,
-          top: 480,
-          width: 700,
+          top: 500,
+          width: 720,
           fontFamily: F.body,
           fontWeight: 600,
           fontSize: 40,
@@ -229,32 +316,64 @@ const Outro: React.FC = () => {
           transform: `translateY(${(1 - s(0, 50)) * 20}px)`,
         }}
       >
-        Хороша програма описує <span style={{ color: C.accentHi }}>залежності</span> між даними.
+        Хороша програма описує <span style={{ color: C.accentHi, textShadow: `0 0 18px ${C.accent}` }}>залежності</span> між даними.
       </div>
 
       <svg width={1920} height={1080} style={{ position: "absolute", left: 0, top: 0, opacity: graph }}>
+        <defs>
+          {EDGES.map(([a, b], i) => {
+            const [p0, , , p3] = bez(a, b);
+            return (
+              <linearGradient key={i} id={`eg${i}`} gradientUnits="userSpaceOnUse" x1={p0.x} y1={p0.y} x2={p3.x} y2={p3.y}>
+                <stop offset="0%" stopColor={NODES[a].color} />
+                <stop offset="100%" stopColor={NODES[b].color} />
+              </linearGradient>
+            );
+          })}
+        </defs>
         {EDGES.map(([a, b], i) => {
           const [p0, p1, p2, p3] = bez(a, b);
+          const d = `M ${p0.x} ${p0.y} C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`;
           return (
-            <path
-              key={i}
-              d={`M ${p0.x} ${p0.y} C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`}
-              fill="none"
-              stroke={C.line}
-              strokeWidth={3}
-              strokeDasharray="2 10"
-              strokeLinecap="round"
-            />
+            <g key={i}>
+              <path d={d} fill="none" stroke={`url(#eg${i})`} strokeWidth={14} opacity={0.12} strokeLinecap="round" />
+              <path d={d} fill="none" stroke={`url(#eg${i})`} strokeWidth={2.5} opacity={0.55} strokeLinecap="round" />
+              <path d={d} fill="none" stroke={`url(#eg${i})`} strokeWidth={4} strokeDasharray="3 21" strokeDashoffset={-(t * 110) % 24} strokeLinecap="round" />
+            </g>
           );
         })}
+        <circle
+          cx={NODES.FOLD.x}
+          cy={NODES.FOLD.y}
+          r={104}
+          fill="none"
+          stroke={C.mint}
+          strokeWidth={2}
+          strokeDasharray="10 16"
+          opacity={0.45 + 0.4 * foldKick}
+          transform={`rotate(${t * 36} ${NODES.FOLD.x} ${NODES.FOLD.y})`}
+        />
+        <circle
+          cx={NODES.FOLD.x}
+          cy={NODES.FOLD.y}
+          r={124}
+          fill="none"
+          stroke={C.amber}
+          strokeWidth={1.5}
+          strokeDasharray="4 22"
+          opacity={0.35}
+          transform={`rotate(${-t * 24} ${NODES.FOLD.x} ${NODES.FOLD.y})`}
+        />
         {particles}
+        {sparks}
       </svg>
 
       {(Object.keys(NODES) as NodeId[]).map((id, i) => {
         const n = NODES[id];
         const p = s(0, 30 + i * 5, POP);
         const g = clamp01(glow[id] ?? 0);
-        const h = id === "FOLD" ? 74 : 62;
+        const h = id === "FOLD" ? 78 : 62;
+        const breathe = 1 + 0.015 * Math.sin(t * 2.2 + i);
         return (
           <div
             key={id}
@@ -266,19 +385,19 @@ const Outro: React.FC = () => {
               height: h,
               borderRadius: id === "FOLD" ? 22 : 31,
               border: `3px solid ${n.color}`,
-              background: g > 0.02 ? `rgba(33,39,56,${1 - 0.3 * g})` : C.panel,
+              background: `linear-gradient(180deg, ${n.color}${g > 0.05 ? "33" : "14"}, ${C.panel})`,
               boxSizing: "border-box",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontFamily: F.mono,
               fontWeight: 700,
-              fontSize: 24,
-              color: n.color,
+              fontSize: id === "FOLD" ? 28 : 24,
+              color: g > 0.4 ? "#ffffff" : n.color,
               fontVariantLigatures: "none",
-              boxShadow: g > 0.02 ? `0 0 ${34 * g}px ${n.color}` : undefined,
+              boxShadow: `0 0 ${10 + 40 * g}px ${n.color}, inset 0 0 ${6 + 16 * g}px ${n.color}55`,
               opacity: clamp01(p),
-              transform: `scale(${(0.6 + 0.4 * p) * (1 + 0.06 * g)})`,
+              transform: `scale(${(0.6 + 0.4 * p) * breathe * (1 + 0.1 * g)})`,
             }}
           >
             {n.label}
@@ -290,14 +409,15 @@ const Outro: React.FC = () => {
           position: "absolute",
           left: NODES.FOLD.x - 120,
           width: 240,
-          top: NODES.FOLD.y + 56,
+          top: NODES.FOLD.y + 140,
           textAlign: "center",
           fontFamily: F.mono,
           fontWeight: 700,
-          fontSize: 40,
+          fontSize: 48,
           color: C.mint,
-          textShadow: `0 0 ${18 * foldPulse}px ${C.mint}`,
+          textShadow: `0 0 ${10 + 26 * foldKick}px ${C.mint}`,
           opacity: clamp01(s(0, 70)),
+          transform: `scale(${1 + 0.28 * foldKick})`,
         }}
       >
         {arrived}
@@ -307,7 +427,7 @@ const Outro: React.FC = () => {
           position: "absolute",
           left: NODES.FOLD.x - 120,
           width: 240,
-          top: NODES.FOLD.y + 108,
+          top: NODES.FOLD.y + 202,
           textAlign: "center",
           fontFamily: F.body,
           fontWeight: 600,
