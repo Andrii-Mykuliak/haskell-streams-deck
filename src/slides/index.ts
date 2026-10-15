@@ -4,6 +4,7 @@ import { p1Slides } from "./p1-streams";
 import { p2Slides } from "./p2-models";
 import { p3Slides } from "./p3-haskell";
 import { p4Slides } from "./p4-folds";
+import { p4IntroSlides } from "./p4-intro";
 import { p4bSlides } from "./p4b-folds";
 import { p5Slides, summarySlide } from "./p5-pipelines";
 import { outroSlide } from "./outro";
@@ -16,6 +17,7 @@ export const SLIDES: SlideDef[] = [
   agendaSlide(2),
   ...p3Slides,
   agendaSlide(3),
+  ...p4IntroSlides,
   ...p4Slides,
   ...p4bSlides,
   agendaSlide(4),
